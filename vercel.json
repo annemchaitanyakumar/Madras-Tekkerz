@@ -1,13 +1,12 @@
 {
-  "functions": {
-    "dist/server/server.js": {
-      "runtime": "nodejs22.x"
-    }
-  },
-  "routes": [
+  "builds": [
     {
-      "src": "/(.*)",
-      "dest": "/dist/server/server.js"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
     }
+  ],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
