@@ -20,7 +20,7 @@ export function Fixtures() {
         </Reveal>
 
         <div className="rounded-xl border border-faint overflow-hidden bg-navy">
-          <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 text-[11px] tracking-[0.25em] uppercase text-muted-w border-b border-faint">
+          <div className="hidden md:grid grid-cols-12 gap-4 px-5 md:px-6 py-4 text-[11px] tracking-[0.25em] uppercase text-muted-w border-b border-faint">
             <div className="col-span-2">Date</div>
             <div className="col-span-1">Team</div>
             <div className="col-span-4">Opponent</div>
@@ -35,7 +35,7 @@ export function Fixtures() {
               delay={i * 60}
               threshold={0.05}
             >
-              <div className="grid grid-cols-12 gap-4 px-6 py-5 md:py-6 border-b border-faint last:border-0 hover:bg-white/[0.03] transition-colors items-center">
+              <div className="grid grid-cols-12 gap-4 px-5 md:px-6 py-5 md:py-6 border-b border-faint last:border-0 hover:bg-white/[0.03] transition-colors items-center">
                 <div className="col-span-4 md:col-span-2">
                   <div className="font-display text-2xl md:text-3xl text-white tracking-wide">{f.date}</div>
                   <div className="text-[10px] tracking-[0.25em] uppercase text-muted-w">{f.day}</div>

@@ -1,6 +1,6 @@
 import { Reveal } from "./Reveal";
 import arena from "@/assets/turf-arena.jpg";
-import mtStadium from "@/assets/mt-stadium.jpg";
+import mtStadium from "@/assets/mt-stadium11.jpg";
 
 const perks = [
   "FIFA quality artificial turf",

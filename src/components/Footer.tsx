@@ -93,7 +93,7 @@ export function Footer() {
       </div>
 
       {/* Copyright row — below the watermark */}
-      <div className="max-w-[1400px] mx-auto px-0">
+      <div className="max-w-[1400px] mx-auto px-5 md:px-10">
         <div className="pt-4 pb-6 flex flex-wrap items-center justify-between gap-4 text-xs text-muted-w">
           <div>© {new Date().getFullYear()} Madras Tekkerz Football Academy. All rights reserved.</div>
           <div className="flex gap-6">

@@ -5,11 +5,25 @@ import player1 from "@/assets/player-1.jpg";
 import player2 from "@/assets/player-2.jpg";
 import player3 from "@/assets/player-3.jpg";
 import mtTeam from "@/assets/mt-team.jpg";
-import mtStadium from "@/assets/mt-stadium.jpg";
+import mtStadium from "@/assets/mt-stadium.mp4";
 import turfAction from "@/assets/turf-action.jpg";
-import heroVideo from "@/assets/The weekend is finally here, and what better way to celebrate than with a thrilling game of foot.mp4";
+import dar6551 from "@/assets/DAR_6551.JPG";
+import img1068 from "@/assets/IMG_1068.JPG";
+import img2847 from "@/assets/IMG_2847.JPG";
+import img2941 from "@/assets/IMG_2941.JPG";
 
-const images: string[] = [player1, player2, player3, mtTeam, mtStadium, turfAction];
+const images: string[] = [
+  player1,     // Column 1
+  mtTeam,      // Column 1
+  player2,     // Column 1
+  player3,     // Column 2
+  mtStadium,   // Column 2
+  img2941,     // Column 2 (Center Column)
+  dar6551,     // Column 2
+  img1068,     // Column 3
+  turfAction,  // Column 3
+  img2847,     // Column 3
+];
 
 export default function Gallery() {
   return (
@@ -21,32 +35,32 @@ export default function Gallery() {
         </Reveal>
 
         <div className="gallery-grid">
-          {images.map((src, i) => (
-            <Reveal 
-              key={i} 
-              as="div" 
-              variant="scale" 
-              delay={i * 80} 
-              className="gallery-item"
-              threshold={0.05}
-            >
-              <img src={src as unknown as string} alt={`sports-${i + 1}`} />
-            </Reveal>
-          ))}
-          <Reveal 
-            as="div" 
-            variant="scale" 
-            delay={images.length * 80} 
-            className="gallery-item gallery-video"
-            threshold={0.05}
-          >
-            <video
-              src={heroVideo as unknown as string}
-              controls
-              playsInline
-              preload="metadata"
-            />
-          </Reveal>
+          {images.map((src, i) => {
+            const isVideo = typeof src === "string" && src.includes(".mp4");
+            return (
+              <Reveal 
+                key={i} 
+                as="div" 
+                variant="scale" 
+                delay={i * 80} 
+                className={`gallery-item ${isVideo ? "video-item" : ""}`}
+                threshold={0.05}
+              >
+                {isVideo ? (
+                  <video
+                    src={src as unknown as string}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : (
+                  <img src={src as unknown as string} alt={`sports-${i + 1}`} />
+                )}
+              </Reveal>
+            );
+          })}
         </div>
       </div>
     </section>

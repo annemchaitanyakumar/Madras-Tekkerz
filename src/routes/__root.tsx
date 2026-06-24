@@ -14,6 +14,7 @@ import appCss from "../styles.css?url";
 import Loader from "../components/Loader";
 import { CustomCursor } from "../components/CustomCursor";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import favicon from "../assets/MT-Logo.png?url";
 
 function NotFoundComponent() {
   return (
@@ -90,6 +91,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
+      {
+        rel: "icon",
+        type: "image/png",
+        href: favicon,
+      },
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Anton&family=Black+Ops+One&family=Inter:wght@300;400;500;600;700;800&display=swap",
