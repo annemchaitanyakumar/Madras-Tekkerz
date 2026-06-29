@@ -68,14 +68,15 @@ export function CustomCursor() {
       pointer-events:none;
       z-index:2147483647;
       isolation:isolate;
-      transform:translate3d(-300px,-300px,0);
-      margin-top:-${SIZE/2}px;
-      margin-left:-${SIZE/2}px;
+      transform-origin:0 0;
+      transform:translate3d(-9999px,-9999px,0);
       will-change:transform;
       filter:drop-shadow(0 4px 12px rgba(0,0,0,0.55));
-      transition:filter .25s ease, width .2s ease, height .2s ease,
-                 margin-top .2s ease, margin-left .2s ease;
+      transition:filter .25s ease;
     `;
+    // Track displayed size and click scale for accurate transform
+    let displaySize = SIZE;
+    let clickScale = 1;
     root.appendChild(canvas);
     document.body.appendChild(root);
 
@@ -232,7 +233,10 @@ export function CustomCursor() {
       // Lerp cursor position
       curX += (mouseX - curX) * 0.13;
       curY += (mouseY - curY) * 0.13;
-      root.style.transform = `translate3d(${curX}px,${curY}px,0)`;
+      // Position: translate to cursor, scale from that point, then offset to center
+      // transform-origin:0 0 ensures scale pivot is the translate origin (cursor pos)
+      const half = displaySize / 2;
+      root.style.transform = `translate3d(${curX}px,${curY}px,0) scale(${clickScale}) translate3d(${-half}px,${-half}px,0)`;
 
       // Cursor velocity
       const vx = mouseX - prevX;
@@ -274,11 +278,21 @@ export function CustomCursor() {
 
     raf = requestAnimationFrame(loop);
 
-    // ── Event listeners ───────────────────────────────────────────────────
-    const onMove = (e: MouseEvent) => { mouseX = e.clientX; mouseY = e.clientY; };
+    let hasMoved = false;
+    const onMove = (e: MouseEvent) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      if (!hasMoved) {
+        curX = mouseX;
+        curY = mouseY;
+        prevX = mouseX;
+        prevY = mouseY;
+        hasMoved = true;
+      }
+    };
 
-    const onDown = () => { root.style.scale = '0.78'; };
-    const onUp   = () => { root.style.scale = '1'; };
+    const onDown = () => { clickScale = 0.78; };
+    const onUp   = () => { clickScale = 1; };
 
     const onOver = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
@@ -286,20 +300,19 @@ export function CustomCursor() {
       if (hit === isHovered) return;
       isHovered = hit;
       if (hit) {
-        root.style.width  = `${SIZE + 12}px`;
-        root.style.height = `${SIZE + 12}px`;
-        root.style.marginTop  = `-${(SIZE + 12) / 2}px`;
-        root.style.marginLeft = `-${(SIZE + 12) / 2}px`;
+        const hoverSize = SIZE + 12;
+        displaySize = hoverSize;
+        root.style.width  = `${hoverSize}px`;
+        root.style.height = `${hoverSize}px`;
         root.style.filter = `drop-shadow(0 0 14px rgba(245,168,0,0.75)) drop-shadow(0 4px 14px rgba(0,0,0,0.6))`;
-        canvas.style.width  = `${SIZE + 12}px`;
-        canvas.style.height = `${SIZE + 12}px`;
+        canvas.style.width  = `${hoverSize}px`;
+        canvas.style.height = `${hoverSize}px`;
         // Kick spin faster on hover
         angVY += 0.05;
       } else {
+        displaySize = SIZE;
         root.style.width  = `${SIZE}px`;
         root.style.height = `${SIZE}px`;
-        root.style.marginTop  = `-${SIZE / 2}px`;
-        root.style.marginLeft = `-${SIZE / 2}px`;
         root.style.filter = `drop-shadow(0 4px 12px rgba(0,0,0,0.55))`;
         canvas.style.width  = `${SIZE}px`;
         canvas.style.height = `${SIZE}px`;
