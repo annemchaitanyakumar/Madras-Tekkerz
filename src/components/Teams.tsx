@@ -1,7 +1,7 @@
 import { Reveal } from "./Reveal";
-import team from "@/assets/mt-team.jpg";
-import training from "@/assets/mt-training.jpg";
-import action from "@/assets/turf-action.jpg";
+import team from "@/assets/mt-team1.jpg";
+import training from "@/assets/mt-training1.jpg";
+import action from "@/assets/turf-action1.jpg";
 
 const teams = [
   {
@@ -42,13 +42,14 @@ export function Teams() {
         <div className="grid md:grid-cols-3 gap-6">
           {teams.map((t, i) => (
             <Reveal key={t.name} variant="scale" delay={i * 120}>
-              <article className="news-card h-full">
-                <div className="relative h-60 overflow-hidden">
+              <article className="news-card h-full select-none">
+                <div className="relative h-60 overflow-hidden pointer-events-none">
                   <img
                     src={t.img}
                     alt={t.name}
                     loading="eager"
-                    className="w-full h-full object-cover"
+                    draggable={false}
+                    className="w-full h-full object-cover pointer-events-none"
                     onError={(e) => {
                       const img = e.currentTarget as HTMLImageElement;
                       console.warn(`Team image failed to load for ${t.name}:`, img.src);

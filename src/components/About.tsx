@@ -1,6 +1,6 @@
 import { Reveal } from "./Reveal";
 import { AnimatedCounter } from "./AnimatedCounter";
-import training from "@/assets/mt-training.jpg";
+import training from "@/assets/mt-training1.jpg";
 
 export function About() {
   return (

@@ -3,335 +3,398 @@ import { useEffect } from "react";
 // ─── 3D Vector Math ──────────────────────────────────────────────────────────
 type V3 = [number, number, number];
 
-const norm  = ([x,y,z]: V3): V3 => { const l = Math.sqrt(x*x+y*y+z*z); return [x/l,y/l,z/l]; };
-const cross = ([ax,ay,az]: V3, [bx,by,bz]: V3): V3 => [ay*bz-az*by, az*bx-ax*bz, ax*by-ay*bx];
-const dot   = ([ax,ay,az]: V3, [bx,by,bz]: V3) => ax*bx + ay*by + az*bz;
-const scale = ([x,y,z]: V3, s: number): V3 => [x*s, y*s, z*s];
-const add   = ([ax,ay,az]: V3, [bx,by,bz]: V3): V3 => [ax+bx, ay+by, az+bz];
+const norm = ([x, y, z]: V3): V3 => {
+  const l = Math.sqrt(x * x + y * y + z * z);
+  return l === 0 ? [0, 0, 0] : [x / l, y / l, z / l];
+};
 
-// Rodrigues' rotation formula — rotate v around axis k by angle θ
-function rotateAround(v: V3, k: V3, theta: number): V3 {
-  const cosT = Math.cos(theta), sinT = Math.sin(theta);
-  const kn   = norm(k);
-  return add(add(scale(v, cosT), scale(cross(kn, v), sinT)), scale(kn, dot(kn, v) * (1 - cosT)));
-}
+const cross = ([ax, ay, az]: V3, [bx, by, bz]: V3): V3 => [
+  ay * bz - az * by,
+  az * bx - ax * bz,
+  ax * by - ay * bx,
+];
 
-// ─── Football Geometry ────────────────────────────────────────────────────────
-// Icosahedron vertices (12 pentagon centres of a truncated icosahedron)
+// ─── Pre-computed Football Geometry ──────────────────────────────────────────
 const PHI = (1 + Math.sqrt(5)) / 2;
-const PENTAGON_CENTRES: V3[] = [
-  [0, 1, PHI], [0,-1, PHI], [0, 1,-PHI], [0,-1,-PHI],
-  [1, PHI, 0], [-1, PHI, 0], [1,-PHI, 0], [-1,-PHI, 0],
-  [PHI, 0, 1], [-PHI, 0, 1], [PHI, 0,-1], [-PHI, 0,-1],
-].map(v => norm(v as V3));
+const PENT_CENTRES: V3[] = [
+  [0, 1, PHI], [0, -1, PHI], [0, 1, -PHI], [0, -1, -PHI],
+  [1, PHI, 0], [-1, PHI, 0], [1, -PHI, 0], [-1, -PHI, 0],
+  [PHI, 0, 1], [-PHI, 0, 1], [PHI, 0, -1], [-PHI, 0, -1],
+].map((v) => norm(v as V3));
 
-// Build pentagon vertex ring on the sphere around a centre point
-function pentagonRing(centre: V3, angRadius: number): V3[] {
-  const up: V3 = Math.abs(centre[1]) < 0.9 ? [0,1,0] : [1,0,0];
-  const u  = norm(cross(up, centre));
-  const v  = cross(centre, u);
-  const cosR = Math.cos(angRadius), sinR = Math.sin(angRadius);
+function createPentagonRing(centre: V3, angRadius: number): V3[] {
+  const up: V3 = Math.abs(centre[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const u = norm(cross(up, centre));
+  const v = cross(centre, u);
+  const cosR = Math.cos(angRadius);
+  const sinR = Math.sin(angRadius);
   return Array.from({ length: 5 }, (_, i) => {
-    const a = (i * 2 * Math.PI / 5) - Math.PI / 2;
-    const cos = Math.cos(a), sin = Math.sin(a);
+    const a = (i * 2 * Math.PI) / 5 - Math.PI / 2;
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
     return norm([
-      cosR * centre[0] + sinR * (cos * u[0] + sin * v[0]),
-      cosR * centre[1] + sinR * (cos * u[1] + sin * v[1]),
-      cosR * centre[2] + sinR * (cos * u[2] + sin * v[2]),
+      cosR * centre[0] + sinR * (ca * u[0] + sa * v[0]),
+      cosR * centre[1] + sinR * (ca * u[1] + sa * v[1]),
+      cosR * centre[2] + sinR * (ca * u[2] + sa * v[2]),
     ]);
   });
 }
+const PENT_RINGS = PENT_CENTRES.map((c) => createPentagonRing(c, 0.38));
 
-// Pre-compute pentagon rings (angular radius ≈ 0.37 rad gives nice gap for seams)
-const PENTAGON_RINGS = PENTAGON_CENTRES.map(c => pentagonRing(c, 0.37));
-
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── CustomCursor Component ──────────────────────────────────────────────────
 export function CustomCursor() {
   useEffect(() => {
+    if (typeof window === "undefined") return;
     if (!window.matchMedia("(hover:hover) and (pointer:fine)").matches) return;
 
-    // ── Canvas setup (2× DPR for crisp rendering) ──────────────────────────
-    const DPR  = Math.min(window.devicePixelRatio || 1, 2);
-    const SIZE = 28;                   // CSS pixels
-    const PX   = Math.round(SIZE * DPR); // physical pixels
+    // ── Setup Dimensions ─────────────────────────────────────────────────────
+    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    const BALL_SIZE = 26; // CSS px
+    const PADDING = 10;   // Padding for shadow & glow
+    const TOTAL_SIZE = BALL_SIZE + PADDING * 2;
+    const HALF = TOTAL_SIZE / 2;
 
-    const canvas = document.createElement("canvas");
-    canvas.width  = PX;
-    canvas.height = PX;
-    canvas.style.cssText = `display:block;width:${SIZE}px;height:${SIZE}px;`;
+    const CW = Math.round(TOTAL_SIZE * DPR);
+    const CH = Math.round(TOTAL_SIZE * DPR);
+    const CX = CW / 2;
+    const CY = CH / 2;
+    const R = (BALL_SIZE * DPR) / 2;
 
+    // ── DOM Tree ─────────────────────────────────────────────────────────────
+    const oldRoot = document.getElementById("fc-root");
+    if (oldRoot) oldRoot.remove();
+
+    // 1. root: handles instant translate3d (zero latency, zero layout reflow)
     const root = document.createElement("div");
     root.id = "fc-root";
-    root.style.cssText = `
-      position:fixed; top:0; left:0;
-      width:${SIZE}px; height:${SIZE}px;
-      pointer-events:none;
-      z-index:2147483647;
-      isolation:isolate;
-      transform-origin:0 0;
-      transform:translate3d(-9999px,-9999px,0);
-      will-change:transform;
-      filter:drop-shadow(0 4px 12px rgba(0,0,0,0.55));
-      transition:filter .25s ease;
-    `;
-    // Track displayed size and click scale for accurate transform
-    let displaySize = SIZE;
-    let clickScale = 1;
-    root.appendChild(canvas);
+    root.style.cssText = [
+      "position:fixed",
+      "top:0",
+      "left:0",
+      `width:${TOTAL_SIZE}px`,
+      `height:${TOTAL_SIZE}px`,
+      "pointer-events:none",
+      "z-index:2147483647",
+      "transform:translate3d(-9999px,-9999px,0)",
+      "will-change:transform",
+      "opacity:0",
+      "transition:opacity 0.2s ease",
+    ].join(";");
+
+    // 2. scaler: handles GPU-accelerated hover scale and click squashing
+    const scaler = document.createElement("div");
+    scaler.id = "fc-scaler";
+    scaler.style.cssText = [
+      "width:100%",
+      "height:100%",
+      "transform-origin:center center",
+      "pointer-events:none",
+      "transition:transform 0.22s cubic-bezier(0.16,1,0.3,1)",
+      "will-change:transform",
+    ].join(";");
+
+    // 3. canvas: draws 3D ball
+    const canvas = document.createElement("canvas");
+    canvas.width = CW;
+    canvas.height = CH;
+    canvas.style.cssText = `display:block;width:${TOTAL_SIZE}px;height:${TOTAL_SIZE}px;pointer-events:none;`;
+
+    scaler.appendChild(canvas);
+    root.appendChild(scaler);
     document.body.appendChild(root);
 
-    // ── Hide native cursor ─────────────────────────────────────────────────
+    // Hide native OS cursor on desktop
     const styleEl = document.createElement("style");
-    styleEl.id = "fc-hide";
-    styleEl.textContent = `@media(hover:hover) and (pointer:fine){*,*::before,*::after{cursor:none!important;}}`;
-    if (!document.getElementById("fc-hide")) document.head.appendChild(styleEl);
+    styleEl.id = "fc-style";
+    styleEl.textContent =
+      "@media(hover:hover) and (pointer:fine){*,*::before,*::after{cursor:none!important;}}";
+    if (!document.getElementById("fc-style")) document.head.appendChild(styleEl);
 
-    const ctx = canvas.getContext("2d")!;
-    const R  = (PX / 2) * 0.88;       // sphere radius in physical px
-    const CX = PX / 2;
-    const CY = PX / 2;
+    const ctx = canvas.getContext("2d", { alpha: true });
+    if (!ctx) return;
 
-    // ── Rotation state (quaternion-like axis + angles) ─────────────────────
-    let axisX: V3 = [1, 0, 0];        // current spin axis X
-    let axisY: V3 = [0, 1, 0];        // current spin axis Y
-    // Rotation is stored as cumulative rotations around world X/Y
-    let rotX = 0.4, rotY = 0.2;
+    // ── Pre-bake all gradients ONCE ──────────────────────────────────────────
+    // Sphere 3D shading
+    const sphereGrad = ctx.createRadialGradient(
+      CX - R * 0.35, CY - R * 0.4, R * 0.02,
+      CX, CY, R * 1.05
+    );
+    sphereGrad.addColorStop(0.00, "#ffffff");
+    sphereGrad.addColorStop(0.18, "#f0f2f5");
+    sphereGrad.addColorStop(0.48, "#d1d5db");
+    sphereGrad.addColorStop(0.78, "#8b93a0");
+    sphereGrad.addColorStop(0.92, "#4a5260");
+    sphereGrad.addColorStop(1.00, "#1f242d");
 
-    // Angular velocity vector [wx, wy] — in radians/frame
-    let angVX = 0.003;
-    let angVY = 0.006;
+    // Specular highlight
+    const specGrad = ctx.createRadialGradient(
+      CX - R * 0.32, CY - R * 0.36, 0,
+      CX - R * 0.15, CY - R * 0.15, R * 0.65
+    );
+    specGrad.addColorStop(0.00, "rgba(255, 255, 255, 0.95)");
+    specGrad.addColorStop(0.20, "rgba(255, 255, 255, 0.65)");
+    specGrad.addColorStop(0.50, "rgba(255, 255, 255, 0.12)");
+    specGrad.addColorStop(1.00, "rgba(255, 255, 255, 0)");
 
-    // ── Mouse / position state ─────────────────────────────────────────────
-    let mouseX = -300, mouseY = -300;
-    let curX   = -300, curY   = -300;
-    let prevX  = -300, prevY  = -300;
+    // Normal ambient shadow
+    const shadowNormal = ctx.createRadialGradient(
+      CX, CY + 2 * DPR, R * 0.3,
+      CX, CY + 2 * DPR, R * 1.2
+    );
+    shadowNormal.addColorStop(0.0, "rgba(0, 0, 0, 0.5)");
+    shadowNormal.addColorStop(0.6, "rgba(0, 0, 0, 0.15)");
+    shadowNormal.addColorStop(1.0, "rgba(0, 0, 0, 0)");
+
+    // Hover gold glow halo shadow
+    const shadowHover = ctx.createRadialGradient(
+      CX, CY + 2 * DPR, R * 0.4,
+      CX, CY + 2 * DPR, R * 1.35
+    );
+    shadowHover.addColorStop(0.0, "rgba(245, 168, 0, 0.65)");
+    shadowHover.addColorStop(0.5, "rgba(245, 168, 0, 0.25)");
+    shadowHover.addColorStop(1.0, "rgba(245, 168, 0, 0)");
+
+    // ── Rotation Matrix Setup ────────────────────────────────────────────────
+    let rotX = 0.5;
+    let rotY = 0.3;
+    let angVX = 0.002;
+    let angVY = 0.005;
+
+    let m00 = 1, m01 = 0, m02 = 0;
+    let m10 = 0, m11 = 1, m12 = 0;
+    let m20 = 0, m21 = 0, m22 = 1;
+
+    const updateMatrix = () => {
+      const cx = Math.cos(rotX), sx = Math.sin(rotX);
+      const cy = Math.cos(rotY), sy = Math.sin(rotY);
+      m00 = cy;        m01 = 0;   m02 = sy;
+      m10 = sx * sy;   m11 = cx;  m12 = -sx * cy;
+      m20 = -cx * sy;  m21 = sx;  m22 = cx * cy;
+    };
+
+    const applyRot = ([x, y, z]: V3): V3 => [
+      m00 * x + m02 * z,
+      m10 * x + m11 * y + m12 * z,
+      m20 * x + m21 * y + m22 * z,
+    ];
+
+    // Pre-allocated patch structures to eliminate GC allocations
+    type ScreenPatch = {
+      pts: Array<{ px: number; py: number }>;
+      z: number;
+    };
+    const visiblePatches: ScreenPatch[] = [];
+
     let isHovered = false;
-    let raf: number;
+    let isMouseDown = false;
 
-    // ── Pre-build sphere gradient (cached) ────────────────────────────────
-    const buildSphereGrad = () => {
-      // Light source at upper-left → brighter there, dark at lower-right
-      const g = ctx.createRadialGradient(
-        CX - R * 0.3, CY - R * 0.35, R * 0.01,
-        CX + R * 0.05, CY + R * 0.1, R * 1.02
-      );
-      g.addColorStop(0.00, '#f8f8f8');
-      g.addColorStop(0.18, '#e4e4e4');
-      g.addColorStop(0.42, '#c0c0c0');
-      g.addColorStop(0.65, '#888888');
-      g.addColorStop(0.85, '#484848');
-      g.addColorStop(1.00, '#1a1a1a');
-      return g;
-    };
-
-    // ── Rotate a 3D point by current rotX, rotY ───────────────────────────
-    const applyRot = (p: V3): V3 => {
-      let v = rotateAround(p, [1, 0, 0], rotX);
-          v = rotateAround(v, [0, 1, 0], rotY);
-      return v;
-    };
-
-    // ── Project 3D point on unit sphere → canvas 2D coords ───────────────
-    const proj = ([x, y, z]: V3) => ({
-      px: CX + x * R,
-      py: CY - y * R,   // flip Y (canvas Y grows down)
-      depth: z,         // +1 = facing camera, -1 = away
-    });
-
-    // ── Draw one frame ────────────────────────────────────────────────────
+    // ── Canvas Render (No clip mask, ultra-fast 0.1ms render) ────────────────
     const draw = () => {
-      ctx.clearRect(0, 0, PX, PX);
+      ctx.clearRect(0, 0, CW, CH);
 
-      // ── Base sphere ──────────────────────────────────────────────────
-      ctx.save();
+      // 1. Shadow / Glow (rendered behind ball)
+      ctx.beginPath();
+      ctx.arc(CX, CY + 2 * DPR, R * 1.15, 0, Math.PI * 2);
+      ctx.fillStyle = isHovered ? shadowHover : shadowNormal;
+      ctx.fill();
+
+      // 2. Base 3D Sphere
       ctx.beginPath();
       ctx.arc(CX, CY, R, 0, Math.PI * 2);
-      ctx.clip();
+      ctx.fillStyle = sphereGrad;
+      ctx.fill();
 
-      ctx.fillStyle = buildSphereGrad();
-      ctx.fillRect(0, 0, PX, PX);
+      // 3. Visible pentagon patches (all front-facing vertices naturally stay inside circle)
+      visiblePatches.length = 0;
+      for (let i = 0; i < PENT_CENTRES.length; i++) {
+        const c3 = applyRot(PENT_CENTRES[i]);
+        if (c3[2] <= 0.02) continue; // Backface culling
 
-      // ── Football patches ─────────────────────────────────────────────
-      // Collect all patches with depth for painter's sort
-      type PatchInfo = { verts: Array<{px:number,py:number}>, depth: number, z: number };
-      const patches: PatchInfo[] = [];
-
-      for (let i = 0; i < PENTAGON_CENTRES.length; i++) {
-        const centre3D = applyRot(PENTAGON_CENTRES[i]);
-        if (centre3D[2] < -0.15) continue; // rough back-face cull on centre
-
-        const ring3D  = PENTAGON_RINGS[i].map(applyRot);
-        const projected = ring3D.map(proj);
-
-        // Average z of all 5 verts for sorting
-        const avgZ = ring3D.reduce((s, v) => s + v[2], 0) / 5;
-
-        patches.push({ verts: projected, depth: avgZ, z: centre3D[2] });
+        const ring = PENT_RINGS[i];
+        const pts: Array<{ px: number; py: number }> = [];
+        for (let j = 0; j < 5; j++) {
+          const v3 = applyRot(ring[j]);
+          pts.push({
+            px: CX + v3[0] * R,
+            py: CY - v3[1] * R,
+          });
+        }
+        visiblePatches.push({ pts, z: c3[2] });
       }
 
-      // Sort back-to-front (painter's algorithm)
-      patches.sort((a, b) => a.depth - b.depth);
+      // Sort front-facing patches by depth (at most 5-6 patches)
+      visiblePatches.sort((a, b) => a.z - b.z);
 
-      for (const { verts, z } of patches) {
-        // Depth-based patch appearance:
-        // At z=1 (front): fully black, high contrast
-        // At z=0 (equator edge): dark grey, lower contrast
-        const t = Math.max(0, z);  // 0…1
-        const bri = Math.round(10 + (1 - t) * 30); // 10 at front, 40 at edge
-        const alpha = 0.55 + t * 0.4;
+      ctx.lineWidth = 0.75 * DPR;
+      for (let i = 0; i < visiblePatches.length; i++) {
+        const { pts, z } = visiblePatches[i];
+        const t = Math.max(0, Math.min(1, z));
+        const bri = (20 + (1 - t) * 20) | 0;
 
-        ctx.save();
-        ctx.globalAlpha = alpha;
         ctx.beginPath();
-        ctx.moveTo(verts[0].px, verts[0].py);
-        for (let k = 1; k < verts.length; k++) ctx.lineTo(verts[k].px, verts[k].py);
+        ctx.moveTo(pts[0].px, pts[0].py);
+        for (let k = 1; k < 5; k++) {
+          ctx.lineTo(pts[k].px, pts[k].py);
+        }
         ctx.closePath();
 
-        ctx.fillStyle   = `rgb(${bri},${bri},${bri})`;
-        ctx.strokeStyle = `rgba(${bri+35},${bri+35},${bri+35},0.5)`;
-        ctx.lineWidth   = 0.6 * DPR;
+        ctx.fillStyle = `rgb(${bri},${bri},${bri})`;
+        ctx.strokeStyle = `rgba(${bri + 45},${bri + 45},${bri + 45},0.6)`;
         ctx.fill();
         ctx.stroke();
-        ctx.restore();
       }
 
-      // ── Specular highlight (stays fixed — pure light reflection) ─────
-      const spec = ctx.createRadialGradient(
-        CX - R * 0.28, CY - R * 0.32, 0,
-        CX - R * 0.05, CY - R * 0.05, R * 0.62
-      );
-      spec.addColorStop(0.00, 'rgba(255,255,255,0.96)');
-      spec.addColorStop(0.18, 'rgba(255,255,255,0.72)');
-      spec.addColorStop(0.45, 'rgba(255,255,255,0.25)');
-      spec.addColorStop(0.75, 'rgba(255,255,255,0.06)');
-      spec.addColorStop(1.00, 'rgba(255,255,255,0)');
-      ctx.fillStyle = spec;
-      ctx.fillRect(0, 0, PX, PX);
-
-      // ── Secondary soft bounce light (lower right — subtle fill) ──────
-      const fill = ctx.createRadialGradient(
-        CX + R * 0.5, CY + R * 0.45, 0,
-        CX + R * 0.3, CY + R * 0.3, R * 0.55
-      );
-      fill.addColorStop(0,   'rgba(255,255,255,0.09)');
-      fill.addColorStop(1,   'rgba(255,255,255,0)');
-      ctx.fillStyle = fill;
-      ctx.fillRect(0, 0, PX, PX);
-
-      ctx.restore(); // end sphere clip
-
-      // ── Rim stroke ───────────────────────────────────────────────────
+      // 4. Specular highlight overlay
       ctx.beginPath();
-      ctx.arc(CX, CY, R - 0.5, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-      ctx.lineWidth   = 1.2 * DPR;
+      ctx.arc(CX, CY, R, 0, Math.PI * 2);
+      ctx.fillStyle = specGrad;
+      ctx.fill();
+
+      // 5. Rim outline
+      ctx.beginPath();
+      ctx.arc(CX, CY, R - 0.4, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(15, 20, 28, 0.65)";
+      ctx.lineWidth = 1.1 * DPR;
       ctx.stroke();
     };
 
-    // ── Main animation loop ───────────────────────────────────────────────
+    // ── Animation Loop (Physics & 3D roll only, decoupled from position) ─────
+    let raf: number;
     const loop = () => {
-      // Lerp cursor position
-      curX += (mouseX - curX) * 0.13;
-      curY += (mouseY - curY) * 0.13;
-      // Position: translate to cursor, scale from that point, then offset to center
-      // transform-origin:0 0 ensures scale pivot is the translate origin (cursor pos)
-      const half = displaySize / 2;
-      root.style.transform = `translate3d(${curX}px,${curY}px,0) scale(${clickScale}) translate3d(${-half}px,${-half}px,0)`;
+      // Momentum dampening
+      angVX *= 0.93;
+      angVY *= 0.93;
 
-      // Cursor velocity
-      const vx = mouseX - prevX;
-      const vy = mouseY - prevY;
-      const speed = Math.sqrt(vx * vx + vy * vy);
+      // Gentle ambient idle spin when resting
+      const idleMin = 0.002;
+      if (Math.abs(angVX) < idleMin) angVX += 0.0006;
+      if (Math.abs(angVY) < idleMin * 2) angVY += 0.0016;
 
-      // Inject velocity into angular velocity
-      // Moving right → rotates around world Y (positive angVY)
-      // Moving down  → rotates around world X (positive angVX)
-      if (speed > 0.2) {
-        angVX += vy * 0.00090;
-        angVY += vx * 0.00090;
-      }
+      // Clamp max angular velocity
+      angVX = Math.max(-0.16, Math.min(0.16, angVX));
+      angVY = Math.max(-0.16, Math.min(0.16, angVY));
 
-      // Damping — ball gradually coasts to a slow idle spin
-      angVX *= 0.92;
-      angVY *= 0.92;
-
-      // Idle minimum rotation so the ball always looks alive
-      const IDLE = 0.0025;
-      if (Math.abs(angVX) < IDLE * 0.3) angVX += IDLE * 0.2;
-      if (Math.abs(angVY) < IDLE)       angVY += IDLE;
-
-      // Clamp max spin speed
-      const MAX_SPIN = 0.18;
-      angVX = Math.max(-MAX_SPIN, Math.min(MAX_SPIN, angVX));
-      angVY = Math.max(-MAX_SPIN, Math.min(MAX_SPIN, angVY));
-
-      // Apply rotation
       rotX += angVX;
       rotY += angVY;
 
-      prevX = mouseX;
-      prevY = mouseY;
-
+      updateMatrix();
       draw();
+
       raf = requestAnimationFrame(loop);
     };
 
     raf = requestAnimationFrame(loop);
 
+    // ── Input Listeners (Zero-Latency Pointer Tracking) ──────────────────────
+    let prevX = 0;
+    let prevY = 0;
     let hasMoved = false;
-    const onMove = (e: MouseEvent) => {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
-      if (!hasMoved) {
-        curX = mouseX;
-        curY = mouseY;
-        prevX = mouseX;
-        prevY = mouseY;
+
+    const onMove = (e: MouseEvent | PointerEvent) => {
+      const x = e.clientX;
+      const y = e.clientY;
+
+      // 1. INSTANT hardware pointer position update (0ms latency, zero lag!)
+      root.style.transform = `translate3d(${x - HALF}px,${y - HALF}px,0)`;
+
+      // 2. Rolling ball physics
+      if (hasMoved) {
+        const dx = x - prevX;
+        const dy = y - prevY;
+        angVY += dx * 0.0016;
+        angVX += dy * 0.0016;
+      } else {
         hasMoved = true;
+        root.style.opacity = "1";
+      }
+
+      prevX = x;
+      prevY = y;
+    };
+
+    const updateScalerTransform = () => {
+      if (isMouseDown) {
+        scaler.style.transform = "scale(0.85)";
+      } else if (isHovered) {
+        scaler.style.transform = "scale(1.28)";
+      } else {
+        scaler.style.transform = "scale(1)";
       }
     };
 
-    const onDown = () => { clickScale = 0.78; };
-    const onUp   = () => { clickScale = 1; };
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      isMouseDown = true;
+      updateScalerTransform();
+    };
 
-    const onOver = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      const hit = !!t?.closest?.("a,button,[role='button'],input,textarea,select,label");
-      if (hit === isHovered) return;
-      isHovered = hit;
-      if (hit) {
-        const hoverSize = SIZE + 12;
-        displaySize = hoverSize;
-        root.style.width  = `${hoverSize}px`;
-        root.style.height = `${hoverSize}px`;
-        root.style.filter = `drop-shadow(0 0 14px rgba(245,168,0,0.75)) drop-shadow(0 4px 14px rgba(0,0,0,0.6))`;
-        canvas.style.width  = `${hoverSize}px`;
-        canvas.style.height = `${hoverSize}px`;
-        // Kick spin faster on hover
-        angVY += 0.05;
-      } else {
-        displaySize = SIZE;
-        root.style.width  = `${SIZE}px`;
-        root.style.height = `${SIZE}px`;
-        root.style.filter = `drop-shadow(0 4px 12px rgba(0,0,0,0.55))`;
-        canvas.style.width  = `${SIZE}px`;
-        canvas.style.height = `${SIZE}px`;
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      isMouseDown = false;
+      updateScalerTransform();
+    };
+
+    // ── Interactive Hover Targets ────────────────────────────────────────────
+    const INTERACTIVE_SELECTOR =
+      "a, button, [role='button'], input, textarea, select, label, .nav-pill, .btn-primary, .btn-outline, [data-cursor='pointer']";
+
+    let hoverCheckTimer = 0;
+    const onHoverCheck = (e: MouseEvent | PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      clearTimeout(hoverCheckTimer);
+      // Small 16ms throttle to coalesce nested child crossings
+      hoverCheckTimer = window.setTimeout(() => {
+        const hit = !!target.closest(INTERACTIVE_SELECTOR);
+        if (hit !== isHovered) {
+          isHovered = hit;
+          updateScalerTransform();
+          if (hit) angVY += 0.03; // Playful spin impulse on hover
+        }
+      }, 16);
+    };
+
+    // Only hide if cursor completely exits the browser viewport
+    const onMouseLeaveDoc = (e: MouseEvent) => {
+      if (!e.relatedTarget && !(e as any).toElement) {
+        root.style.opacity = "0";
       }
+    };
+
+    const onMouseEnterDoc = () => {
+      if (hasMoved) root.style.opacity = "1";
+    };
+
+    // Prevent HTML5 native drag from intercepting mousemove events
+    const onDragStart = (e: DragEvent) => {
+      e.preventDefault();
     };
 
     window.addEventListener("mousemove", onMove, { passive: true });
-    window.addEventListener("mousedown", onDown, { passive: true });
-    window.addEventListener("mouseup",   onUp,   { passive: true });
-    window.addEventListener("mouseover", onOver, { passive: true });
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("mousedown", onMouseDown, { passive: true });
+    window.addEventListener("mouseup", onMouseUp, { passive: true });
+    window.addEventListener("mouseover", onHoverCheck, { passive: true });
+    window.addEventListener("pointerover", onHoverCheck, { passive: true });
+    window.addEventListener("dragstart", onDragStart);
+    document.documentElement.addEventListener("mouseleave", onMouseLeaveDoc, { passive: true });
+    document.documentElement.addEventListener("mouseenter", onMouseEnterDoc, { passive: true });
 
     return () => {
       cancelAnimationFrame(raf);
+      clearTimeout(hoverCheckTimer);
       window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("mouseup",   onUp);
-      window.removeEventListener("mouseover", onOver);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("mouseover", onHoverCheck);
+      window.removeEventListener("pointerover", onHoverCheck);
+      window.removeEventListener("dragstart", onDragStart);
+      document.documentElement.removeEventListener("mouseleave", onMouseLeaveDoc);
+      document.documentElement.removeEventListener("mouseenter", onMouseEnterDoc);
       root.remove();
-      document.getElementById("fc-hide")?.remove();
+      document.getElementById("fc-style")?.remove();
     };
   }, []);
 

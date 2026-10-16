@@ -1,8 +1,8 @@
 import { Reveal } from "./Reveal";
 import { MarqueeTicker } from "./MarqueeTicker";
-import news1 from "@/assets/mt-team.jpg";
-import news2 from "@/assets/turf-trophy.jpg";
-import news3 from "@/assets/turf-action.jpg";
+import news1 from "@/assets/mt-team1.jpg";
+import news2 from "@/assets/turf-trophy1.jpg";
+import news3 from "@/assets/turf-action1.jpg";
 
 const items = [
   {
@@ -37,9 +37,9 @@ export function News() {
         <div className="grid md:grid-cols-3 gap-6">
           {items.map((n, i) => (
             <Reveal key={n.title} variant="fade-up" delay={i * 120}>
-              <a href="#news" className="news-card block h-full group">
-                <div className="relative h-52 overflow-hidden">
-                  <img src={n.img} alt={n.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <article className="news-card block h-full group select-none">
+                <div className="relative h-52 overflow-hidden pointer-events-none">
+                  <img src={n.img} alt={n.title} loading="lazy" draggable={false} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 pointer-events-none" />
                   <span className="absolute top-3 left-3 bg-white text-navy-dark text-[10px] tracking-[0.2em] uppercase px-3 py-1 rounded-full font-semibold">
                     {n.tag}
                   </span>
@@ -49,11 +49,11 @@ export function News() {
                   <h3 className="font-display text-xl md:text-2xl text-white mt-3 leading-tight tracking-wide">
                     {n.title}
                   </h3>
-                  <div className="mt-5 inline-flex items-center gap-2 text-sm text-white group-hover:gap-3 transition-all">
+                  <a href="#news" className="mt-5 inline-flex items-center gap-2 text-sm text-white group-hover:gap-3 transition-all">
                     Know More <span aria-hidden>→</span>
-                  </div>
+                  </a>
                 </div>
-              </a>
+              </article>
             </Reveal>
           ))}
         </div>
